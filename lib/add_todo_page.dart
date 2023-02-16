@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Todo_Item.dart';
-import 'package:flutter_application_1/todo_provider.dart';
+import 'package:flutter_application_1/todo_item.dart';
+import 'package:flutter_application_1/states/todo_bloc.dart';
+import 'package:flutter_application_1/states/todo_event.dart';
+import 'package:flutter_application_1/states/todo_state.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
 
 class AddTodoPage extends StatefulWidget {
@@ -36,16 +39,23 @@ class _AddTodoPageState extends State<AddTodoPage> {
                   decoration: const InputDecoration(labelText: 'Title'),
                   controller: _notesController,
                 ),
-                ElevatedButton(
+                BlocBuilder<TodoBloc, TodoState>(builder: (context, state) {
+                  return ElevatedButton(
                     onPressed: () async {
-                      var todo = TodoItem(const Uuid().v4(),
+                      TodoItem newItem = TodoItem(const Uuid().v4(),
                           _titleController.text, _notesController.text, false);
-                      await TodoProvider.instance.insertTodo(todo);
+
+                      // add todo and fetch state
+                      context.read<TodoBloc>().add(AddTodoEvent(
+                          newItem.id, newItem.title, newItem.notes));
+                      context.read<TodoBloc>().add(FetchTodoEvent());
 
                       if (!mounted) return;
                       closePage(context);
                     },
-                    child: const Text('Add'))
+                    child: const Text('Add'),
+                  );
+                })
               ],
             )),
       ),

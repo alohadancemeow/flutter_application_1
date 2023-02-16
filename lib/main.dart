@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Todo_Item.dart';
+import 'package:flutter_application_1/states/todo_bloc.dart';
+import 'package:flutter_application_1/states/todo_event.dart';
+import 'package:flutter_application_1/todo_item.dart';
 import 'package:flutter_application_1/add_todo_page.dart';
 import 'package:flutter_application_1/todo_provider.dart';
+import 'package:flutter_application_1/states/todo_state.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() {
@@ -13,14 +17,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.orange,
-        textTheme: GoogleFonts.jetBrainsMonoTextTheme(),
-        appBarTheme: const AppBarTheme(foregroundColor: Color(0xFFFFFFFF)),
+    return MultiBlocProvider(
+      providers: [BlocProvider(create: (context) => TodoBloc())],
+      child: MaterialApp(
+        title: 'Flutter Demo',
+        theme: ThemeData(
+          primarySwatch: Colors.orange,
+          textTheme: GoogleFonts.jetBrainsMonoTextTheme(),
+          useMaterial3: true,
+          // appBarTheme: const AppBarTheme(foregroundColor: Color(0xFFFFFFFF)),
+        ),
+        home: const MyHomePage(title: 'My todo app'),
       ),
-      home: const MyHomePage(title: 'My todo app'),
     );
   }
 }
@@ -37,23 +45,11 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   TodoProvider todoProvider = TodoProvider.instance;
 
-  // fetch todos
-  Future<List<TodoItem>> _fecthTodos() async {
-    return await todoProvider.fetchTodos();
-  }
-
   // push to addTodoPage
   void _onFabCliked() {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (context) => const AddTodoPage()))
         .then((value) => setState(() {}));
-  }
-
-  // handle update check
-  void _onCheckValueChanged(bool isChecked, TodoItem item) async {
-    TodoItem newItem = TodoItem(item.id, item.title, item.notes, isChecked);
-    await todoProvider.updateTodo(newItem);
-    setState(() {});
   }
 
   @override
@@ -62,43 +58,51 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: FutureBuilder<List<TodoItem>>(
-          future: _fecthTodos(),
-          builder:
-              (BuildContext context, AsyncSnapshot<List<TodoItem>> snapshot) {
-            if (snapshot.hasData) {
-              List<TodoItem> items = snapshot.data ?? [];
+      body: BlocBuilder<TodoBloc, TodoState>(builder: (context, state) {
+        if (state is InitialTodoState) {
+          context.read<TodoBloc>().add(FetchTodoEvent());
+        }
 
-              return ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    var todoItem = items[index];
+        if (state is TodoListState) {
+          var items = state.todos;
+          return ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                var todoItem = items[index];
 
-                    return Dismissible(
-                        key: UniqueKey(),
-                        direction: DismissDirection.endToStart,
-                        background: Container(),
-                        secondaryBackground: Container(color: Colors.red),
-                        onDismissed: (direction) {
-                          setState(() {
-                            todoProvider.deleteTodo(todoItem);
-                          });
-                        },
-                        child: ListTile(
-                          title: Text(todoItem.title),
-                          subtitle: Text(todoItem.notes),
-                          leading: Checkbox(
-                              value: todoItem.done,
-                              onChanged: (value) => _onCheckValueChanged(
-                                  value ?? false, todoItem)),
-                        ));
-                  });
-            } else {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
-          }),
+                return Dismissible(
+                  key: UniqueKey(),
+                  direction: DismissDirection.endToStart,
+                  background: Container(),
+                  secondaryBackground: Container(color: Colors.red),
+                  onDismissed: (direction) {
+                    // delete and fetch state
+                    context.read<TodoBloc>().add(DeleteTodoEvent(items[index]));
+                    context.read<TodoBloc>().add(FetchTodoEvent());
+                  },
+                  child: ListTile(
+                    title: Text(todoItem.title),
+                    subtitle: Text(todoItem.notes),
+                    leading: Checkbox(
+                      value: todoItem.done,
+                      onChanged: (value) {
+                        TodoItem updatedItem = TodoItem(todoItem.id,
+                            todoItem.title, todoItem.notes, value ?? false);
+
+                        // update and fetch state
+                        context
+                            .read<TodoBloc>()
+                            .add(UpdateTodoEvent(updatedItem));
+                        context.read<TodoBloc>().add(FetchTodoEvent());
+                      },
+                    ),
+                  ),
+                );
+              });
+        }
+
+        return const Center(child: CircularProgressIndicator());
+      }),
       floatingActionButton: FloatingActionButton(
         onPressed: _onFabCliked,
         tooltip: 'add todo',
